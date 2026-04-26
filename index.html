@@ -114,6 +114,9 @@
         }
 
         function updateScoreUI() {
+            // Pastikan tidak ada NaN yang tampil di UI
+            redWins = isNaN(redWins) ? 0 : redWins;
+            blueWins = isNaN(blueWins) ? 0 : blueWins;
             document.getElementById('score-display').innerText = `🔴 ${redWins} - ${blueWins} 🔵`;
         }
 
@@ -124,11 +127,16 @@
             
             try {
                 const { data, error } = await clientDB.from('rocket_race').select('session_id').eq('room_id', classCode).limit(1);
-                if (data && data.length > 0) {
+                // Tambahkan pengecekan ketat agar data[0].session_id benar-benar ada
+                if (data && data.length > 0 && data[0].session_id && data[0].session_id.includes('_')) {
                     currentSession = data[0].session_id;
                     let parts = currentSession.split('_');
-                    redWins = parseInt(parts[1]) || 0;
+                    redWins = parseInt(parts[1]) || 0; // || 0 mencegah NaN
                     blueWins = parseInt(parts[2]) || 0;
+                } else {
+                    currentSession = "0_0_0";
+                    redWins = 0;
+                    blueWins = 0;
                 }
                 
                 updateScoreUI();
@@ -147,7 +155,6 @@
         }
 
         function generateQuestion() {
-            // Seed untuk soal yang sinkron tapi progresif
             let seedString = classCode + currentSession + qIndex;
             let hash = 0;
             for (let i = 0; i < seedString.length; i++) { hash = ((hash << 5) - hash) + seedString.charCodeAt(i); hash |= 0; }
@@ -160,19 +167,19 @@
 
             let qText = "", ans = 0;
 
-            if (qIndex <= 5) { // LEVEL 1: Mudah
+            if (qIndex <= 5) { 
                 let a = rnd(5, 20), b = rnd(5, 20);
                 if (rnd(0, 1)) { qText = `${a} + ${b}`; ans = a + b; }
                 else { qText = `${Math.max(a,b)} - ${Math.min(a,b)}`; ans = Math.max(a,b) - Math.min(a,b); }
             } 
-            else if (qIndex <= 12) { // LEVEL 2: Menengah
+            else if (qIndex <= 12) { 
                 let a = rnd(10, 50), b = rnd(10, 50), c = rnd(2, 5);
                 let choice = rnd(1, 3);
                 if (choice == 1) { qText = `${a} + ${b} - ${rnd(5,15)}`; ans = eval(qText); }
                 else if (choice == 2) { qText = `${rnd(2,9)} x ${rnd(2,9)}`; ans = eval(qText.replace('x','*')); }
                 else { qText = `${a} + ${rnd(2,5)} x ${rnd(2,5)}`; ans = eval(qText.replace('x','*')); }
             }
-            else { // LEVEL 3+: Susah
+            else { 
                 let a = rnd(20, 100), b = rnd(11, 20);
                 let choice = rnd(1, 3);
                 if (choice == 1) { qText = `${a} x ${rnd(2,4)} + ${rnd(10,50)}`; ans = eval(qText.replace('x','*')); }
@@ -217,8 +224,11 @@
             clientDB.channel('race').on('postgres_changes', { 
                 event: 'UPDATE', schema: 'public', table: 'rocket_race', filter: `room_id=eq.${classCode}` 
             }, p => {
-                if (p.new.session_id !== currentSession) {
-                    startNewRoundLocal(p.new.session_id);
+                // Cegah sistem membaca session_id yang null dari database saat roket digerakkan
+                let incomingSession = p.new.session_id || currentSession; 
+                
+                if (incomingSession !== currentSession && incomingSession.includes('_')) {
+                    startNewRoundLocal(incomingSession);
                 } else {
                     updateUI(p.new.team_name, p.new.position);
                 }
@@ -226,7 +236,7 @@
         }
 
         function updateUI(team, pos) {
-            let targetSoal = gameDuration / 3; // Rata-rata 3 detik per soal
+            let targetSoal = gameDuration / 3; 
             let posisiPersen = (pos / targetSoal) * 90;
             const el = document.getElementById(team === 'red' ? "cont-red" : "cont-blue");
             if (el) el.style.bottom = `calc(${Math.min(posisiPersen, 90)}% + 10px)`;
@@ -252,8 +262,9 @@
                 else { resultText = "SKOR SERI!"; lastWinner = 'tie'; }
             }
 
-            let pRed = lastWinner === 'red' ? redWins + 1 : redWins;
-            let pBlue = lastWinner === 'blue' ? blueWins + 1 : blueWins;
+            // Keamanan skor tambahan untuk layar end-game
+            let pRed = lastWinner === 'red' ? (parseInt(redWins) || 0) + 1 : (parseInt(redWins) || 0);
+            let pBlue = lastWinner === 'blue' ? (parseInt(blueWins) || 0) + 1 : (parseInt(blueWins) || 0);
 
             document.getElementById("game-area").classList.add("hidden");
             const go = document.getElementById("game-over-panel");
@@ -267,9 +278,14 @@
         }
 
         async function triggerNextRound() {
-            if (lastWinner === 'red') redWins++;
-            if (lastWinner === 'blue') blueWins++;
-            let newSess = `${Date.now()}_${redWins}_${blueWins}`;
+            if (lastWinner === 'red') redWins = (parseInt(redWins) || 0) + 1;
+            if (lastWinner === 'blue') blueWins = (parseInt(blueWins) || 0) + 1;
+            
+            // Pastikan angka valid sebelum dikirim ke database
+            let cleanRed = parseInt(redWins) || 0;
+            let cleanBlue = parseInt(blueWins) || 0;
+            let newSess = `${Date.now()}_${cleanRed}_${cleanBlue}`;
+            
             await clientDB.from('rocket_race').upsert([
                 { room_id: classCode, team_name: 'red', position: 0, session_id: newSess },
                 { room_id: classCode, team_name: 'blue', position: 0, session_id: newSess }
@@ -277,10 +293,14 @@
         }
 
         function startNewRoundLocal(sess) {
+            if (!sess || !sess.includes('_')) return; // Tolak string sesi yang invalid
+            
             currentSession = sess;
             let parts = sess.split('_');
-            redWins = parseInt(parts[1]);
-            blueWins = parseInt(parts[2]);
+            
+            // Tambahkan || 0 agar skor tetap 0 jika datanya gagal di-parse
+            redWins = parseInt(parts[1]) || 0;
+            blueWins = parseInt(parts[2]) || 0;
             updateScoreUI();
             
             qIndex = 1; isGameOver = false; isFrozen = false;
