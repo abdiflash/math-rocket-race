@@ -88,6 +88,17 @@
         <button onclick="resetMatch()" style="background:#444; color:white; width:95%; margin-top:20px; font-size:11px;">🔄 RESET GLOBAL MATCH</button>
     </div>
 
+    <div id="waiting-area" class="panel hidden">
+        <h2 style="color: var(--gold); margin-top: 0;">RUANG TUNGGU</h2>
+        <p>Menunggu pemain lain bersiap...</p>
+        <p style="font-size: 13px; color: #aaa;">Jika semua sudah siap, klik tombol di bawah untuk memulai balapan bersama!</p>
+        <button onclick="startGameGlobal()" style="background: var(--green); color: white; width: 100%; padding: 15px; font-size: 16px; font-weight:bold;">🚀 MULAI GAME BERSAMA</button>
+        <div style="margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
+            <button class="btn-players" onclick="showPlayers('red')">👁️ Tim Merah</button>
+            <button class="btn-players" onclick="showPlayers('blue')">👁️ Tim Biru</button>
+        </div>
+    </div>
+
     <div id="game-area" class="panel hidden">
         <div id="question">...</div>
         <input type="number" id="answer-input" placeholder="Jawaban..." autofocus autocomplete="off">
@@ -234,16 +245,16 @@
                 
                 updateScoreUI();
                 document.getElementById("room-display").innerText = "ROOM: " + classCode;
+                
+                // Pindahkan pemain ke Ruang Tunggu
                 document.getElementById("setup-area").classList.add("hidden");
-                document.getElementById("game-area").classList.remove("hidden");
+                document.getElementById("waiting-area").classList.remove("hidden");
+                
                 document.getElementById("game-area").classList.add(team === 'red' ? 'panel-red' : 'panel-blue');
-
                 document.getElementById(team === 'red' ? 'cont-red' : 'cont-blue').classList.add('my-rocket');
                 document.getElementById(team === 'red' ? 'cont-blue' : 'cont-red').classList.add('opponent-rocket');
                 
-                generateQuestion();
                 initRealtime();
-                startTimer();
             } catch (err) { await showDialog("Error: " + err.message); }
         }
 
@@ -273,7 +284,7 @@
         }
 
         function generateQuestion() {
-            // Menggunakan Pure Random murni (soal selalu beda setiap saat)
+            // Pure Random murni (soal selalu beda setiap saat)
             function rnd(min, max) {
                 return Math.floor(Math.random() * (max - min + 1)) + min;
             }
@@ -304,6 +315,7 @@
             document.getElementById("question").innerText = qText;
             document.getElementById("msg").innerText = `Soal Ke-${qIndex} (Level ${Math.ceil(qIndex/7)})`;
         }
+
         function startTimer() {
             timerRemaining = gameDuration;
             timerInterval = setInterval(() => {
@@ -360,7 +372,6 @@
             const go = document.getElementById("game-over-panel");
             go.classList.remove("hidden");
             
-            // --- BAGIAN INI DITAMBAHKAN TOMBOL KELUAR ---
             go.innerHTML = `
                 <h1 style="color:var(--gold)">RONDE SELESAI</h1>
                 <h2 style="color:var(--green)">${resultText}</h2>
@@ -373,11 +384,10 @@
             `;
         }
 
-        // --- FUNGSI BARU UNTUK KELUAR GAME ---
         async function exitGame() {
             let confirmExit = await showDialog("Yakin ingin keluar dari pertandingan ini?", "confirm");
             if (confirmExit) {
-                location.reload(); // Me-reload halaman agar kembali ke menu utama
+                location.reload(); 
             }
         }
 
@@ -385,6 +395,17 @@
             if (lastWinner === 'red') redWins = (parseInt(redWins) || 0) + 1;
             if (lastWinner === 'blue') blueWins = (parseInt(blueWins) || 0) + 1;
             
+            let cleanRed = parseInt(redWins) || 0;
+            let cleanBlue = parseInt(blueWins) || 0;
+            let newSess = `${Date.now()}_${cleanRed}_${cleanBlue}`;
+            
+            await clientDB.from('rocket_race').upsert([
+                { room_id: classCode, team_name: 'red', position: 0, session_id: newSess },
+                { room_id: classCode, team_name: 'blue', position: 0, session_id: newSess }
+            ], { onConflict: 'room_id, team_name' });
+        }
+
+        async function startGameGlobal() {
             let cleanRed = parseInt(redWins) || 0;
             let cleanBlue = parseInt(blueWins) || 0;
             let newSess = `${Date.now()}_${cleanRed}_${cleanBlue}`;
@@ -406,9 +427,12 @@
             
             qIndex = 1; isGameOver = false; isFrozen = false;
             updateUI('red', 0); updateUI('blue', 0);
+            
+            document.getElementById("waiting-area").classList.add("hidden");
             document.getElementById("game-over-panel").classList.add("hidden");
             document.getElementById("game-area").classList.remove("hidden");
             document.getElementById("answer-input").value = "";
+            
             generateQuestion();
             clearInterval(timerInterval);
             startTimer();
@@ -445,6 +469,36 @@
             await showDialog("✅ Game berhasil dibersihkan! Skor kembali 0-0 dan pemain telah dikosongkan.");
             location.reload();
         }
+
+        // --- KODE ENTER UNTUK MENJAWAB SOAL ---
+        document.getElementById("answer-input").addEventListener("keydown", async function(e) {
+            if (e.key === "Enter" && !isFrozen && !isGameOver) {
+                let val = parseInt(this.value);
+                if (val === correctAnswer) {
+                    qIndex++;
+                    this.value = "";
+                    generateQuestion();
+                    
+                    const { data } = await clientDB.from('rocket_race').select('position').eq('room_id', classCode).eq('team_name', myTeam).single();
+                    let newPos = (data ? data.position : 0) + 1;
+                    
+                    await clientDB.from('rocket_race').upsert([
+                        { room_id: classCode, team_name: myTeam, position: newPos, session_id: currentSession }
+                    ], { onConflict: 'room_id, team_name' });
+                    
+                } else {
+                    isFrozen = true;
+                    document.getElementById("freeze-overlay").style.display = "flex";
+                    setTimeout(() => {
+                        isFrozen = false;
+                        document.getElementById("freeze-overlay").style.display = "none";
+                        this.value = "";
+                        this.focus();
+                    }, 3000);
+                }
+            }
+        });
+
     </script>
 </body>
 </html>
