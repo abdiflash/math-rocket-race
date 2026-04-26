@@ -15,27 +15,34 @@
         #score-display { font-size: 20px; background: #222; padding: 5px 15px; border-radius: 15px; border: 1px solid #444; letter-spacing: 2px; }
 
         #race-track { 
-            height: 45vh; background: linear-gradient(to top, #16162d, #1f4068);
+            height: 40vh; background: linear-gradient(to top, #16162d, #1f4068);
             margin: 10px; border-radius: 20px; position: relative; border-bottom: 4px solid #333;
             display: flex; justify-content: space-around; align-items: flex-end; padding-bottom: 20px; overflow: hidden;
         }
         .finish-line { position: absolute; top: 10%; width: 100%; border-top: 2px dashed var(--gold); opacity: 0.4; pointer-events: none; }
         
         .rocket-container { display: flex; flex-direction: column; align-items: center; transition: bottom 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: absolute; bottom: 10px; }
-        .rocket { font-size: 45px; filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
+        .rocket { font-size: 40px; filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
         .team-label { background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 8px; font-weight: bold; margin-top: 5px; font-size: 11px; }
 
-        .panel { max-width: 400px; margin: 15px auto; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid #333; }
-        input { width: 85%; padding: 15px; font-size: 24px; border-radius: 10px; border: none; text-align: center; background: #222; color: white; margin-top: 10px; outline: none; }
-        button { padding: 12px 18px; font-size: 15px; cursor: pointer; border-radius: 10px; border: none; font-weight: bold; transition: 0.2s; margin: 5px; }
+        .panel { max-width: 400px; margin: 10px auto; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid #333; }
+        input { width: 85%; padding: 12px; font-size: 18px; border-radius: 10px; border: none; text-align: center; background: #222; color: white; margin-top: 10px; outline: none; border: 1px solid #444; }
+        #answer-input { font-size: 24px; padding: 15px; }
+        button { padding: 12px 18px; font-size: 14px; cursor: pointer; border-radius: 10px; border: none; font-weight: bold; transition: 0.2s; margin: 5px; }
         
         .btn-active { background: var(--green) !important; color: white; transform: scale(1.05); }
         .btn-red { background: var(--red); color: white; }
         .btn-blue { background: var(--blue); color: white; }
+        .btn-players { background: #333; color: white; font-size: 12px; width: 45%; border: 1px solid #555; }
 
-        #question { font-size: 50px; font-weight: bold; margin: 15px 0; color: var(--green); text-shadow: 0 0 20px rgba(0,230,118,0.4); min-height: 60px; }
+        #question { font-size: 45px; font-weight: bold; margin: 10px 0; color: var(--green); text-shadow: 0 0 20px rgba(0,230,118,0.4); min-height: 55px; }
         #freeze-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 82, 82, 0.9); display: none; justify-content: center; align-items: center; z-index: 9999; font-size: 28px; font-weight: bold; }
         
+        /* Modal Popup Pemain */
+        #player-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1a1a2e; padding: 20px; border-radius: 15px; border: 2px solid var(--gold); z-index: 10000; width: 80%; max-width: 300px; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        #player-list { max-height: 200px; overflow-y: auto; margin-top: 10px; font-size: 16px; color: #ddd; text-align: left; padding-left: 20px; }
+        #close-modal { background: var(--red); width: 100%; margin-top: 15px; }
+
         .hidden { display: none; }
         .my-rocket { filter: drop-shadow(0 0 20px var(--gold)) !important; transform: scale(1.2); z-index: 10; }
         .opponent-rocket { opacity: 0.5; filter: grayscale(50%); }
@@ -66,9 +73,10 @@
     <div id="setup-area" class="panel">
         <button onclick="generateRoom()" style="background:#6200ea; color:white; width:95%">+ BUAT KODE KELAS BARU</button>
         <input id="class-code" placeholder="Masukkan Kode Kelas...">
+        <input id="player-name" placeholder="Masukkan Nama Kamu..." maxlength="15">
         
-        <p style="margin: 20px 0 5px;">Pilih Durasi per Ronde:</p>
-        <div style="display: flex; gap: 5px; margin-bottom: 20px;">
+        <p style="margin: 15px 0 5px; font-size: 14px;">Pilih Durasi per Ronde:</p>
+        <div style="display: flex; gap: 5px; margin-bottom: 15px;">
             <button id="t60" style="flex:1" onclick="setDuration(60)" class="btn-active">60 Detik</button>
             <button id="t120" style="flex:1" onclick="setDuration(120)">120 Detik</button>
         </div>
@@ -83,11 +91,22 @@
     <div id="game-area" class="panel hidden">
         <div id="question">...</div>
         <input type="number" id="answer-input" placeholder="Jawaban..." autofocus autocomplete="off">
-        <p id="msg" style="font-size: 14px; color: #aaa; margin-top: 15px;">Adu cepat menjawab soal!</p>
+        <p id="msg" style="font-size: 14px; color: #aaa; margin-top: 10px;">Adu cepat menjawab soal!</p>
+        
+        <div style="margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
+            <button class="btn-players" onclick="showPlayers('red')">👁️ Tim Merah</button>
+            <button class="btn-players" onclick="showPlayers('blue')">👁️ Tim Biru</button>
+        </div>
     </div>
 
     <div id="game-over-panel" class="panel hidden"></div>
     <div id="freeze-overlay">SALAH! TUNGGU 3 DETIK...</div>
+
+    <div id="player-modal">
+        <h3 id="modal-title" style="margin:0; color:var(--gold);">Daftar Pemain</h3>
+        <ol id="player-list"></ol>
+        <button id="close-modal" onclick="document.getElementById('player-modal').style.display='none'">TUTUP</button>
+    </div>
 
     <script>
         const SUPABASE_URL = "https://afvjqiwvxkbsamrngtfg.supabase.co"; 
@@ -95,16 +114,34 @@
         
         const clientDB = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        let myTeam = "", classCode = "", correctAnswer = 0, isFrozen = false, isGameOver = false;
+        let myTeam = "", classCode = "", myName = "", correctAnswer = 0, isFrozen = false, isGameOver = false;
         let gameDuration = 60, timerRemaining = 60, timerInterval;
         let qIndex = 1, currentSession = "0_0_0"; 
         let redWins = 0, blueWins = 0, lastWinner = null;
 
-        function generateRoom() {
+        async function generateRoom() {
             const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
             let code = "";
             for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
-            document.getElementById("class-code").value = code;
+
+            // Minta guru membuat PIN
+            let pin = prompt(`KODE KELAS BARU: ${code}\n\n🔑 Buat PIN rahasia (bebas angka/huruf) untuk ruangan ini:`);
+            
+            if (!pin) {
+                alert("⚠️ Pembuatan kode kelas dibatalkan karena PIN tidak diisi.");
+                return;
+            }
+
+            try {
+                // Simpan ke tabel rooms
+                const { error } = await clientDB.from('rooms').insert([{ room_id: code, pin: pin }]);
+                if (error) throw error;
+
+                document.getElementById("class-code").value = code;
+                alert(`✅ Ruangan berhasil dibuat!\n\n📌 Kode Kelas: ${code}\n🔑 PIN Anda: ${pin}\n\n(Ingat PIN ini baik-baik jika ingin mereset skor)`);
+            } catch (err) {
+                alert("❌ Gagal membuat ruangan: " + err.message);
+            }
         }
 
         function setDuration(sec) {
@@ -114,7 +151,6 @@
         }
 
         function updateScoreUI() {
-            // Pastikan tidak ada NaN yang tampil di UI
             redWins = isNaN(redWins) ? 0 : redWins;
             blueWins = isNaN(blueWins) ? 0 : blueWins;
             document.getElementById('score-display').innerText = `🔴 ${redWins} - ${blueWins} 🔵`;
@@ -122,16 +158,25 @@
 
         async function joinTeam(team) {
             classCode = document.getElementById("class-code").value.trim().toUpperCase();
-            if (!classCode) return alert("Masukkan Kode Kelas!");
+            myName = document.getElementById("player-name").value.trim();
+
+            if (!classCode) return alert("⚠️ Masukkan Kode Kelas dulu!");
+            if (!myName) return alert("⚠️ Masukkan Nama Kamu dulu!");
+            
             myTeam = team;
             
             try {
+                // Simpan nama pemain ke tabel 'players'
+                await clientDB.from('players').insert([
+                    { room_id: classCode, team_name: team, player_name: myName }
+                ]);
+
                 const { data, error } = await clientDB.from('rocket_race').select('session_id').eq('room_id', classCode).limit(1);
-                // Tambahkan pengecekan ketat agar data[0].session_id benar-benar ada
+                
                 if (data && data.length > 0 && data[0].session_id && data[0].session_id.includes('_')) {
                     currentSession = data[0].session_id;
                     let parts = currentSession.split('_');
-                    redWins = parseInt(parts[1]) || 0; // || 0 mencegah NaN
+                    redWins = parseInt(parts[1]) || 0; 
                     blueWins = parseInt(parts[2]) || 0;
                 } else {
                     currentSession = "0_0_0";
@@ -152,6 +197,31 @@
                 initRealtime();
                 startTimer();
             } catch (err) { alert("Error: " + err.message); }
+        }
+
+        async function showPlayers(team) {
+            const listEl = document.getElementById('player-list');
+            listEl.innerHTML = "<i>Memuat data...</i>";
+            document.getElementById('modal-title').innerText = `Anggota Tim ${team === 'red' ? 'Merah 🔴' : 'Biru 🔵'}`;
+            document.getElementById('player-modal').style.display = 'block';
+
+            try {
+                const { data, error } = await clientDB.from('players')
+                    .select('player_name')
+                    .eq('room_id', classCode)
+                    .eq('team_name', team);
+
+                if (error) throw error;
+                
+                if (data && data.length > 0) {
+                    let uniqueNames = [...new Set(data.map(d => d.player_name))];
+                    listEl.innerHTML = uniqueNames.map(name => `<li>${name}</li>`).join('');
+                } else {
+                    listEl.innerHTML = "<li><i>Belum ada pemain bergabung.</i></li>";
+                }
+            } catch (err) {
+                listEl.innerHTML = "<li>Gagal memuat data.</li>";
+            }
         }
 
         function generateQuestion() {
@@ -224,9 +294,7 @@
             clientDB.channel('race').on('postgres_changes', { 
                 event: 'UPDATE', schema: 'public', table: 'rocket_race', filter: `room_id=eq.${classCode}` 
             }, p => {
-                // Cegah sistem membaca session_id yang null dari database saat roket digerakkan
                 let incomingSession = p.new.session_id || currentSession; 
-                
                 if (incomingSession !== currentSession && incomingSession.includes('_')) {
                     startNewRoundLocal(incomingSession);
                 } else {
@@ -262,7 +330,6 @@
                 else { resultText = "SKOR SERI!"; lastWinner = 'tie'; }
             }
 
-            // Keamanan skor tambahan untuk layar end-game
             let pRed = lastWinner === 'red' ? (parseInt(redWins) || 0) + 1 : (parseInt(redWins) || 0);
             let pBlue = lastWinner === 'blue' ? (parseInt(blueWins) || 0) + 1 : (parseInt(blueWins) || 0);
 
@@ -281,7 +348,6 @@
             if (lastWinner === 'red') redWins = (parseInt(redWins) || 0) + 1;
             if (lastWinner === 'blue') blueWins = (parseInt(blueWins) || 0) + 1;
             
-            // Pastikan angka valid sebelum dikirim ke database
             let cleanRed = parseInt(redWins) || 0;
             let cleanBlue = parseInt(blueWins) || 0;
             let newSess = `${Date.now()}_${cleanRed}_${cleanBlue}`;
@@ -293,12 +359,10 @@
         }
 
         function startNewRoundLocal(sess) {
-            if (!sess || !sess.includes('_')) return; // Tolak string sesi yang invalid
-            
+            if (!sess || !sess.includes('_')) return; 
             currentSession = sess;
             let parts = sess.split('_');
             
-            // Tambahkan || 0 agar skor tetap 0 jika datanya gagal di-parse
             redWins = parseInt(parts[1]) || 0;
             blueWins = parseInt(parts[2]) || 0;
             updateScoreUI();
@@ -315,13 +379,36 @@
         }
 
         async function resetMatch() {
-            if (!confirm("Reset skor global ke 0-0?")) return;
-            let code = document.getElementById("class-code").value.toUpperCase();
+            let code = document.getElementById("class-code").value.toUpperCase().trim();
+            if (!code) return alert("⚠️ Masukkan Kode Kelas yang ingin direset terlebih dahulu di kolom atas!");
+
+            // Cek PIN dari database berdasarkan Kode Kelas
+            const { data, error } = await clientDB.from('rooms').select('pin').eq('room_id', code).single();
+
+            if (error || !data) {
+                return alert("❌ Kode Kelas tidak ditemukan di database atau belum memiliki PIN. Coba buat ruangan baru!");
+            }
+
+            // Minta PIN ke pengguna
+            let inputPin = prompt(`🔒 Masukkan PIN Guru untuk mereset kelas ${code}:`);
+            
+            // Cocokkan PIN
+            if (inputPin !== data.pin) {
+                return alert("❌ PIN Salah! Reset dibatalkan. Hanya Guru yang tahu PIN ini.");
+            }
+
+            // Eksekusi Reset
+            if (!confirm(`Yakin ingin mereset skor dan menghapus semua nama pemain di kelas ${code}?`)) return;
+
             let newSess = `${Date.now()}_0_0`;
             await clientDB.from('rocket_race').upsert([
                 { room_id: code, team_name: 'red', position: 0, session_id: newSess },
                 { room_id: code, team_name: 'blue', position: 0, session_id: newSess }
             ], { onConflict: 'room_id, team_name' });
+            
+            await clientDB.from('players').delete().eq('room_id', code);
+            
+            alert("✅ Game berhasil dibersihkan! Skor kembali 0-0 dan pemain telah dikosongkan.");
             location.reload();
         }
     </script>
