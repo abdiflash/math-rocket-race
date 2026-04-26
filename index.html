@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Rocket Race - Progressive Difficulty</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --red: #ff5252; --blue: #2979ff; --dark: #0a0a12; --green: #00c853; --gold: #ffd700; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--dark); color: white; text-align: center; overflow-x: hidden; }
+        
+        #info-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #111; border-bottom: 1px solid #333; font-weight: bold; }
+        #timer { color: var(--gold); font-size: 20px; min-width: 60px; text-align: right; }
+        #room-display { min-width: 60px; text-align: left; }
+        #score-display { font-size: 20px; background: #222; padding: 5px 15px; border-radius: 15px; border: 1px solid #444; letter-spacing: 2px; }
+
+        #race-track { 
+            height: 40vh; background: linear-gradient(to top, #16162d, #1f4068);
+            margin: 10px; border-radius: 20px; position: relative; border-bottom: 4px solid #333;
+            display: flex; justify-content: space-around; align-items: flex-end; padding-bottom: 20px; overflow: hidden;
+        }
+        .finish-line { position: absolute; top: 10%; width: 100%; border-top: 2px dashed var(--gold); opacity: 0.4; pointer-events: none; }
+        
+        .rocket-container { display: flex; flex-direction: column; align-items: center; transition: bottom 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: absolute; bottom: 10px; }
+        .rocket { font-size: 40px; filter: drop-shadow(0 0 10px rgba(255,255,255,0.2)); }
+        .team-label { background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 8px; font-weight: bold; margin-top: 5px; font-size: 11px; }
+
+        .panel { max-width: 400px; margin: 10px auto; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 20px; border: 1px solid #333; }
+        input { width: 85%; padding: 12px; font-size: 18px; border-radius: 10px; border: none; text-align: center; background: #222; color: white; margin-top: 10px; outline: none; border: 1px solid #444; }
+        #answer-input { font-size: 24px; padding: 15px; }
+        button { padding: 12px 18px; font-size: 14px; cursor: pointer; border-radius: 10px; border: none; font-weight: bold; transition: 0.2s; margin: 5px; }
+        
+        .btn-active { background: var(--green) !important; color: white; transform: scale(1.05); }
+        .btn-red { background: var(--red); color: white; }
+        .btn-blue { background: var(--blue); color: white; }
+        .btn-players { background: #333; color: white; font-size: 12px; width: 45%; border: 1px solid #555; }
+
+        #question { font-size: 45px; font-weight: bold; margin: 10px 0; color: var(--green); text-shadow: 0 0 20px rgba(0,230,118,0.4); min-height: 55px; }
+        #freeze-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 82, 82, 0.9); display: none; justify-content: center; align-items: center; z-index: 9999; font-size: 28px; font-weight: bold; }
+        
+        /* Modal Popup Pemain & Custom Dialog */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 10000; }
+        .modal-box { background: #1a1a2e; padding: 20px; border-radius: 15px; border: 2px solid var(--gold); width: 80%; max-width: 300px; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        #player-list { max-height: 200px; overflow-y: auto; margin-top: 10px; font-size: 16px; color: #ddd; text-align: left; padding-left: 20px; }
+        
+        .hidden { display: none !important; }
+        .my-rocket { filter: drop-shadow(0 0 20px var(--gold)) !important; transform: scale(1.2); z-index: 10; }
+        .opponent-rocket { opacity: 0.5; filter: grayscale(50%); }
+        .panel-red { border: 2px solid var(--red) !important; }
+        .panel-blue { border: 2px solid var(--blue) !important; }
+    </style>
+</head>
+<body>
+
+    <div id="info-bar">
+        <div id="room-display">ROOM: ----</div>
+        <div id="score-display">🔴 0 - 0 🔵</div>
+        <div id="timer">READY?</div>
+    </div>
+
+    <div id="race-track">
+        <div class="finish-line"></div>
+        <div id="cont-red" class="rocket-container" style="left: 20%;">
+            <div class="rocket">🚀</div>
+            <div class="team-label" style="color: var(--red);">TEAM RED</div>
+        </div>
+        <div id="cont-blue" class="rocket-container" style="right: 20%;">
+            <div class="rocket">🚀</div>
+            <div class="team-label" style="color: var(--blue);">TEAM BLUE</div>
+        </div>
+    </div>
+
+    <div id="setup-area" class="panel">
+        <button onclick="generateRoom()" style="background:#6200ea; color:white; width:95%">+ BUAT KODE KELAS BARU</button>
+        <input id="class-code" placeholder="Masukkan Kode Kelas...">
+        <input id="player-name" placeholder="Masukkan Nama Kamu..." maxlength="15">
+        
+        <p style="margin: 15px 0 5px; font-size: 14px;">Pilih Durasi per Ronde:</p>
+        <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+            <button id="t60" style="flex:1" onclick="setDuration(60)" class="btn-active">60 Detik</button>
+            <button id="t120" style="flex:1" onclick="setDuration(120)">120 Detik</button>
+        </div>
+
+        <div style="display: flex; gap: 5px;">
+            <button class="btn-red" style="flex:1" onclick="joinTeam('red')">JOIN RED</button>
+            <button class="btn-blue" style="flex:1" onclick="joinTeam('blue')">JOIN BLUE</button>
+        </div>
+        <button onclick="resetMatch()" style="background:#444; color:white; width:95%; margin-top:20px; font-size:11px;">🔄 RESET GLOBAL MATCH</button>
+    </div>
+
+    <div id="game-area" class="panel hidden">
+        <div id="question">...</div>
+        <input type="number" id="answer-input" placeholder="Jawaban..." autofocus autocomplete="off">
+        <p id="msg" style="font-size: 14px; color: #aaa; margin-top: 10px;">Adu cepat menjawab soal!</p>
+        
+        <div style="margin-top: 15px; display: flex; justify-content: center; gap: 10px;">
+            <button class="btn-players" onclick="showPlayers('red')">👁️ Tim Merah</button>
+            <button class="btn-players" onclick="showPlayers('blue')">👁️ Tim Biru</button>
+        </div>
+    </div>
+
+    <div id="game-over-panel" class="panel hidden"></div>
+    <div id="freeze-overlay">SALAH! TUNGGU 3 DETIK...</div>
+
+    <div id="player-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="modal-title" style="margin:0; color:var(--gold);">Daftar Pemain</h3>
+            <ol id="player-list"></ol>
+            <button onclick="document.getElementById('player-modal').style.display='none'" class="btn-red" style="width: 100%; margin-top: 15px;">TUTUP</button>
+        </div>
+    </div>
+
+    <div id="custom-dialog" class="modal-overlay">
+        <div class="modal-box">
+            <p id="dialog-msg" style="font-size: 16px; margin-bottom: 15px; white-space: pre-line; color: white;"></p>
+            <input id="dialog-input" type="text" class="hidden" style="width: 85%; margin-bottom: 15px;">
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button id="dialog-btn-cancel" class="btn-red hidden" style="flex: 1;">BATAL</button>
+                <button id="dialog-btn-ok" class="btn-active" style="flex: 1;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = "https://afvjqiwvxkbsamrngtfg.supabase.co"; 
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFmdmpxaXd2eGtic2Ftcm5ndGZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMjgxNzUsImV4cCI6MjA5MjcwNDE3NX0.-_-6UvsWN-0jvIkCyLHf81v3J8O9qQGvV_n-5ubWQ9w";
+        
+        const clientDB = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let myTeam = "", classCode = "", myName = "", correctAnswer = 0, isFrozen = false, isGameOver = false;
+        let gameDuration = 60, timerRemaining = 60, timerInterval;
+        let qIndex = 1, currentSession = "0_0_0"; 
+        let redWins = 0, blueWins = 0, lastWinner = null;
+
+        // Fungsi Custom Dialog untuk menggantikan alert(), prompt(), dan confirm()
+        function showDialog(msg, type = 'alert') {
+            return new Promise((resolve) => {
+                const dialog = document.getElementById('custom-dialog');
+                const msgEl = document.getElementById('dialog-msg');
+                const inputEl = document.getElementById('dialog-input');
+                const btnOk = document.getElementById('dialog-btn-ok');
+                const btnCancel = document.getElementById('dialog-btn-cancel');
+
+                msgEl.innerHTML = msg;
+                dialog.style.display = 'flex';
+                
+                if (type === 'prompt') {
+                    inputEl.classList.remove('hidden');
+                    inputEl.value = '';
+                    inputEl.focus();
+                    btnCancel.classList.remove('hidden');
+                } else if (type === 'confirm') {
+                    inputEl.classList.add('hidden');
+                    btnCancel.classList.remove('hidden');
+                } else {
+                    inputEl.classList.add('hidden');
+                    btnCancel.classList.add('hidden');
+                }
+
+                btnOk.onclick = () => {
+                    dialog.style.display = 'none';
+                    if (type === 'prompt') resolve(inputEl.value);
+                    else resolve(true);
+                };
+
+                btnCancel.onclick = () => {
+                    dialog.style.display = 'none';
+                    if (type === 'prompt') resolve(null);
+                    else resolve(false);
+                };
+            });
+        }
+
+        async function generateRoom() {
+            const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+            let code = "";
+            for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+
+            // Menggunakan custom prompt
+            let pin = await showDialog(`KODE KELAS BARU: <b>${code}</b><br><br>🔑 Buat PIN rahasia (bebas angka/huruf) untuk ruangan ini:`, 'prompt');
+            
+            if (!pin) {
+                await showDialog("⚠️ Pembuatan kode kelas dibatalkan karena PIN tidak diisi.");
+                return;
+            }
+
+            try {
+                const { error } = await clientDB.from('rooms').insert([{ room_id: code, pin: pin }]);
+                if (error) throw error;
+
+                document.getElementById("class-code").value = code;
+                await showDialog(`✅ Ruangan berhasil dibuat!<br><br>📌 Kode Kelas: <b>${code}</b><br>🔑 PIN Anda: <b>${pin}</b><br><br><span style="font-size:12px;color:#aaa;">(Ingat PIN ini baik-baik jika ingin mereset skor)</span>`);
+            } catch (err) {
+                await showDialog("❌ Gagal membuat ruangan: " + err.message);
+            }
+        }
+
+        function setDuration(sec) {
+            gameDuration = sec;
+            document.getElementById('t60').classList.toggle('btn-active', sec === 60);
+            document.getElementById('t120').classList.toggle('btn-active', sec === 120);
+        }
+
+        function updateScoreUI() {
+            redWins = isNaN(redWins) ? 0 : redWins;
+            blueWins = isNaN(blueWins) ? 0 : blueWins;
+            document.getElementById('score-display').innerText = `🔴 ${redWins} - ${blueWins} 🔵`;
+        }
+
+        async function joinTeam(team) {
+            classCode = document.getElementById("class-code").value.trim().toUpperCase();
+            myName = document.getElementById("player-name").value.trim();
+
+            if (!classCode) return await showDialog("⚠️ Masukkan Kode Kelas dulu!");
+            if (!myName) return await showDialog("⚠️ Masukkan Nama Kamu dulu!");
+            
+            myTeam = team;
+            
+            try {
+                await clientDB.from('players').insert([
+                    { room_id: classCode, team_name: team, player_name: myName }
+                ]);
+
+                const { data, error } = await clientDB.from('rocket_race').select('session_id').eq('room_id', classCode).limit(1);
+                
+                if (data && data.length > 0 && data[0].session_id && data[0].session_id.includes('_')) {
+                    currentSession = data[0].session_id;
+                    let parts = currentSession.split('_');
+                    redWins = parseInt(parts[1]) || 0; 
+                    blueWins = parseInt(parts[2]) || 0;
+                } else {
+                    currentSession = "0_0_0";
+                    redWins = 0;
+                    blueWins = 0;
+                }
+                
+                updateScoreUI();
+                document.getElementById("room-display").innerText = "ROOM: " + classCode;
+                document.getElementById("setup-area").classList.add("hidden");
+                document.getElementById("game-area").classList.remove("hidden");
+                document.getElementById("game-area").classList.add(team === 'red' ? 'panel-red' : 'panel-blue');
+
+                document.getElementById(team === 'red' ? 'cont-red' : 'cont-blue').classList.add('my-rocket');
+                document.getElementById(team === 'red' ? 'cont-blue' : 'cont-red').classList.add('opponent-rocket');
+                
+                generateQuestion();
+                initRealtime();
+                startTimer();
+            } catch (err) { await showDialog("Error: " + err.message); }
+        }
+
+        async function showPlayers(team) {
+            const listEl = document.getElementById('player-list');
+            listEl.innerHTML = "<i>Memuat data...</i>";
+            document.getElementById('modal-title').innerText = `Anggota Tim ${team === 'red' ? 'Merah 🔴' : 'Biru 🔵'}`;
+            document.getElementById('player-modal').style.display = 'flex';
+
+            try {
+                const { data, error } = await clientDB.from('players')
+                    .select('player_name')
+                    .eq('room_id', classCode)
+                    .eq('team_name', team);
+
+                if (error) throw error;
+                
+                if (data && data.length > 0) {
+                    let uniqueNames = [...new Set(data.map(d => d.player_name))];
+                    listEl.innerHTML = uniqueNames.map(name => `<li>${name}</li>`).join('');
+                } else {
+                    listEl.innerHTML = "<li><i>Belum ada pemain bergabung.</i></li>";
+                }
+            } catch (err) {
+                listEl.innerHTML = "<li>Gagal memuat data.</li>";
+            }
+        }
+
+        function generateQuestion() {
+            let seedString = classCode + currentSession + qIndex;
+            let hash = 0;
+            for (let i = 0; i < seedString.length; i++) { hash = ((hash << 5) - hash) + seedString.charCodeAt(i); hash |= 0; }
+            let currentSeed = Math.abs(hash) || 1;
+
+            function rnd(min, max) {
+                currentSeed = (currentSeed * 9301 + 49297) % 233280;
+                return Math.floor((currentSeed / 233280) * (max - min + 1)) + min;
+            }
+
+            let qText = "", ans = 0;
+
+            if (qIndex <= 5) { 
+                let a = rnd(5, 20), b = rnd(5, 20);
+                if (rnd(0, 1)) { qText = `${a} + ${b}`; ans = a + b; }
+                else { qText = `${Math.max(a,b)} - ${Math.min(a,b)}`; ans = Math.max(a,b) - Math.min(a,b); }
+            } 
+            else if (qIndex <= 12) { 
+                let a = rnd(10, 50), b = rnd(10, 50), c = rnd(2, 5);
+                let choice = rnd(1, 3);
+                if (choice == 1) { qText = `${a} + ${b} - ${rnd(5,15)}`; ans = eval(qText); }
+                else if (choice == 2) { qText = `${rnd(2,9)} x ${rnd(2,9)}`; ans = eval(qText.replace('x','*')); }
+                else { qText = `${a} + ${rnd(2,5)} x ${rnd(2,5)}`; ans = eval(qText.replace('x','*')); }
+            }
+            else { 
+                let a = rnd(20, 100), b = rnd(11, 20);
+                let choice = rnd(1, 3);
+                if (choice == 1) { qText = `${a} x ${rnd(2,4)} + ${rnd(10,50)}`; ans = eval(qText.replace('x','*')); }
+                else if (choice == 2) { let m = rnd(2,12), n = rnd(2,10); qText = `${m*n} : ${m} + ${rnd(10,30)}`; ans = n + (eval(qText.split('+')[1])); }
+                else { qText = `${rnd(10,30)} + ${rnd(10,30)} + ${rnd(10,30)}`; ans = eval(qText); }
+            }
+
+            correctAnswer = ans;
+            document.getElementById("question").innerText = qText;
+            document.getElementById("msg").innerText = `Soal Ke-${qIndex} (Level ${Math.ceil(qIndex/7)})`;
+        }
+
+        document.getElementById("answer-input").addEventListener("keydown", async (e) => {
+            if (e.key === "Enter" && !isFrozen && !isGameOver) {
+                if (parseInt(e.target.value) === correctAnswer) {
+                    e.target.value = "";
+                    qIndex++;
+                    await clientDB.rpc('increment_rocket', { room: classCode, team: myTeam });
+                    generateQuestion();
+                } else {
+                    isFrozen = true;
+                    document.getElementById("freeze-overlay").style.display = "flex";
+                    setTimeout(() => {
+                        isFrozen = false;
+                        document.getElementById("freeze-overlay").style.display = "none";
+                        document.getElementById("answer-input").focus();
+                    }, 3000);
+                }
+            }
+        });
+
+        function startTimer() {
+            timerRemaining = gameDuration;
+            timerInterval = setInterval(() => {
+                timerRemaining--;
+                document.getElementById("timer").innerText = "⏱ " + timerRemaining + "s";
+                if (timerRemaining <= 0) finishGame();
+            }, 1000);
+        }
+
+        function initRealtime() {
+            clientDB.channel('race').on('postgres_changes', { 
+                event: 'UPDATE', schema: 'public', table: 'rocket_race', filter: `room_id=eq.${classCode}` 
+            }, p => {
+                let incomingSession = p.new.session_id || currentSession; 
+                if (incomingSession !== currentSession && incomingSession.includes('_')) {
+                    startNewRoundLocal(incomingSession);
+                } else {
+                    updateUI(p.new.team_name, p.new.position);
+                }
+            }).subscribe();
+        }
+
+        function updateUI(team, pos) {
+            let targetSoal = gameDuration / 3; 
+            let posisiPersen = (pos / targetSoal) * 90;
+            const el = document.getElementById(team === 'red' ? "cont-red" : "cont-blue");
+            if (el) el.style.bottom = `calc(${Math.min(posisiPersen, 90)}% + 10px)`;
+            
+            if (posisiPersen >= 90) finishGame(team);
+        }
+
+        async function finishGame(winner = null) {
+            if (isGameOver) return;
+            isGameOver = true;
+            clearInterval(timerInterval);
+            
+            let resultText = "WAKTU HABIS!";
+            if (winner) {
+                resultText = `TIM ${winner.toUpperCase()} MENANG!`;
+                lastWinner = winner;
+            } else {
+                const { data } = await clientDB.from('rocket_race').select('*').eq('room_id', classCode);
+                let r = data.find(d => d.team_name === 'red')?.position || 0;
+                let b = data.find(d => d.team_name === 'blue')?.position || 0;
+                if (r > b) { resultText = "TIM MERAH MENANG!"; lastWinner = 'red'; }
+                else if (b > r) { resultText = "TIM BIRU MENANG!"; lastWinner = 'blue'; }
+                else { resultText = "SKOR SERI!"; lastWinner = 'tie'; }
+            }
+
+            let pRed = lastWinner === 'red' ? (parseInt(redWins) || 0) + 1 : (parseInt(redWins) || 0);
+            let pBlue = lastWinner === 'blue' ? (parseInt(blueWins) || 0) + 1 : (parseInt(blueWins) || 0);
+
+            document.getElementById("game-area").classList.add("hidden");
+            const go = document.getElementById("game-over-panel");
+            go.classList.remove("hidden");
+            go.innerHTML = `
+                <h1 style="color:var(--gold)">RONDE SELESAI</h1>
+                <h2 style="color:var(--green)">${resultText}</h2>
+                <p>Skor Global: Merah ${pRed} - Biru ${pBlue}</p>
+                <button onclick="triggerNextRound()" style="background:var(--green); color:white; width:90%; padding:15px;">LANJUT RONDE BERIKUTNYA</button>
+            `;
+        }
+
+        async function triggerNextRound() {
+            if (lastWinner === 'red') redWins = (parseInt(redWins) || 0) + 1;
+            if (lastWinner === 'blue') blueWins = (parseInt(blueWins) || 0) + 1;
+            
+            let cleanRed = parseInt(redWins) || 0;
+            let cleanBlue = parseInt(blueWins) || 0;
+            let newSess = `${Date.now()}_${cleanRed}_${cleanBlue}`;
+            
+            await clientDB.from('rocket_race').upsert([
+                { room_id: classCode, team_name: 'red', position: 0, session_id: newSess },
+                { room_id: classCode, team_name: 'blue', position: 0, session_id: newSess }
+            ], { onConflict: 'room_id, team_name' });
+        }
+
+        function startNewRoundLocal(sess) {
+            if (!sess || !sess.includes('_')) return; 
+            currentSession = sess;
+            let parts = sess.split('_');
+            
+            redWins = parseInt(parts[1]) || 0;
+            blueWins = parseInt(parts[2]) || 0;
+            updateScoreUI();
+            
+            qIndex = 1; isGameOver = false; isFrozen = false;
+            updateUI('red', 0); updateUI('blue', 0);
+            document.getElementById("game-over-panel").classList.add("hidden");
+            document.getElementById("game-area").classList.remove("hidden");
+            document.getElementById("answer-input").value = "";
+            generateQuestion();
+            clearInterval(timerInterval);
+            startTimer();
+            setTimeout(() => document.getElementById("answer-input").focus(), 100);
+        }
+
+        async function resetMatch() {
+            let code = document.getElementById("class-code").value.toUpperCase().trim();
+            if (!code) return await showDialog("⚠️ Masukkan Kode Kelas yang ingin direset terlebih dahulu di kolom atas!");
+
+            const { data, error } = await clientDB.from('rooms').select('pin').eq('room_id', code).single();
+
+            if (error || !data) {
+                return await showDialog("❌ Kode Kelas tidak ditemukan di database atau belum memiliki PIN. Coba buat ruangan baru!");
+            }
+
+            // Menggunakan custom prompt
+            let inputPin = await showDialog(`🔒 Masukkan PIN Guru untuk mereset kelas <b>${code}</b>:`, 'prompt');
+            
+            if (inputPin !== data.pin) {
+                return await showDialog("❌ PIN Salah! Reset dibatalkan. Hanya Guru yang tahu PIN ini.");
+            }
+
+            // Menggunakan custom confirm
+            let isSure = await showDialog(`Yakin ingin mereset skor dan menghapus semua nama pemain di kelas <b>${code}</b>?`, 'confirm');
+            if (!isSure) return;
+
+            let newSess = `${Date.now()}_0_0`;
+            await clientDB.from('rocket_race').upsert([
+                { room_id: code, team_name: 'red', position: 0, session_id: newSess },
+                { room_id: code, team_name: 'blue', position: 0, session_id: newSess }
+            ], { onConflict: 'room_id, team_name' });
+            
+            await clientDB.from('players').delete().eq('room_id', code);
+            
+            await showDialog("✅ Game berhasil dibersihkan! Skor kembali 0-0 dan pemain telah dikosongkan.");
+            location.reload();
+        }
+    </script>
+</body>
+</html>
